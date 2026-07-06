@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.253.0](https://github.com/Flagsmith/flagsmith/compare/v2.252.0...v2.253.0) (2026-07-06)
+
+
+### Features
+
+* **API:** Adopt the `flagsmith` entrypoint ([#7901](https://github.com/Flagsmith/flagsmith/issues/7901)) ([da194ca](https://github.com/Flagsmith/flagsmith/commit/da194caa5b2e70e9707767aa871bbeac3c2eaf00))
+
 ## [2.252.0](https://github.com/Flagsmith/flagsmith/compare/v2.251.0...v2.252.0) (2026-07-03)
 
 
