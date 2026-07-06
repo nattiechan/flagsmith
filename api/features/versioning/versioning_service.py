@@ -171,7 +171,7 @@ def _update_flag_for_versioning_v2(
                 environment=environment,
                 feature_segment=feature_segment,
                 environment_feature_version=new_version,
-                enabled=change_set.enabled,
+                enabled=change_set.enabled or False,
             )
     else:
         # Environment default - always exists
@@ -180,8 +180,9 @@ def _update_flag_for_versioning_v2(
             identity_id=None,
         )
 
-    target_feature_state.enabled = change_set.enabled
-    target_feature_state.save()
+    if change_set.enabled is not None:
+        target_feature_state.enabled = change_set.enabled
+        target_feature_state.save()
 
     _update_feature_state_value(
         target_feature_state.feature_state_value,
@@ -228,13 +229,14 @@ def _update_flag_for_versioning_v1(
             feature=feature,
             environment=environment,
             feature_segment=feature_segment,
-            enabled=change_set.enabled,
+            enabled=change_set.enabled or False,
         )
     else:
         assert len(latest_feature_states) == 1
         target_feature_state = list(latest_feature_states.values())[0]
-        target_feature_state.enabled = change_set.enabled
-        target_feature_state.save()
+        if change_set.enabled is not None:
+            target_feature_state.enabled = change_set.enabled
+            target_feature_state.save()
 
     _update_feature_state_value(
         target_feature_state.feature_state_value,
@@ -250,8 +252,10 @@ def _update_flag_for_versioning_v1(
 
 
 def _update_feature_state_value(
-    fsv: FeatureStateValue, value: str, type_: FeatureValueType
+    fsv: FeatureStateValue, value: str | None, type_: FeatureValueType | None
 ) -> None:
+    if value is None or type_ is None:
+        return
     fsv.set_value(value, type_)
     fsv.save()
 
@@ -352,13 +356,17 @@ def _update_flag_v2_for_versioning_v2(
     env_default_state = new_version.feature_states.get(
         feature_segment__isnull=True, identity_id=None
     )
-    env_default_state.enabled = change_set.environment_default_enabled
-    env_default_state.save()
+    if change_set.environment_default_enabled is not None:
+        env_default_state.enabled = change_set.environment_default_enabled
+        env_default_state.save()
 
     _update_feature_state_value(
         env_default_state.feature_state_value,
         change_set.environment_default_value,
         change_set.environment_default_type,
+    )
+    update_multivariate_values(
+        env_default_state, change_set.environment_default_multivariate_values
     )
 
     for override in change_set.segment_overrides:
@@ -366,8 +374,9 @@ def _update_flag_v2_for_versioning_v2(
             segment_state = new_version.feature_states.get(
                 feature_segment__segment_id=override.segment_id
             )
-            segment_state.enabled = override.enabled
-            segment_state.save()
+            if override.enabled is not None:
+                segment_state.enabled = override.enabled
+                segment_state.save()
 
             _update_feature_state_value(
                 segment_state.feature_state_value,
@@ -383,7 +392,7 @@ def _update_flag_v2_for_versioning_v2(
                 feature=feature,
                 environment=environment,
                 segment_id=override.segment_id,
-                enabled=override.enabled,
+                enabled=override.enabled or False,
                 priority=override.priority,
                 version=new_version,
             )
@@ -412,13 +421,17 @@ def _update_flag_v2_for_versioning_v1(
     assert len(env_default_states) == 1
 
     env_default_state = list(env_default_states.values())[0]
-    env_default_state.enabled = change_set.environment_default_enabled
-    env_default_state.save()
+    if change_set.environment_default_enabled is not None:
+        env_default_state.enabled = change_set.environment_default_enabled
+        env_default_state.save()
 
     _update_feature_state_value(
         env_default_state.feature_state_value,
         change_set.environment_default_value,
         change_set.environment_default_type,
+    )
+    update_multivariate_values(
+        env_default_state, change_set.environment_default_multivariate_values
     )
 
     for override in change_set.segment_overrides:
@@ -435,7 +448,7 @@ def _update_flag_v2_for_versioning_v1(
                 feature=feature,
                 environment=environment,
                 segment_id=override.segment_id,
-                enabled=override.enabled,
+                enabled=override.enabled or False,
                 priority=override.priority,
                 version=None,  # V1 versioning doesn't use versions
             )
@@ -449,8 +462,9 @@ def _update_flag_v2_for_versioning_v1(
         else:
             assert len(segment_states) == 1
             segment_state = list(segment_states.values())[0]
-            segment_state.enabled = override.enabled
-            segment_state.save()
+            if override.enabled is not None:
+                segment_state.enabled = override.enabled
+                segment_state.save()
 
             _update_feature_state_value(
                 segment_state.feature_state_value,

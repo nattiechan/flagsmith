@@ -8,7 +8,7 @@ from features.feature_states.serializers import (
     FeatureValueSerializer,
     UpdateFlagSerializer,
     UpdateFlagV2Serializer,
-    validate_multivariate_state_values,
+    validate_multivariate_options,
 )
 from features.models import Feature
 from projects.models import Project
@@ -200,9 +200,9 @@ def test_update_flag_v2_serializer__mv_option_not_on_feature__returns_invalid(
                     "segment_id": segment.id,
                     "enabled": True,
                     "value": {"type": "string", "value": "test"},
-                    "multivariate_feature_state_values": [
+                    "multivariate_options": [
                         {
-                            "multivariate_feature_option": 999999,
+                            "id": 999999,
                             "percentage_allocation": 100,
                         }
                     ],
@@ -240,13 +240,13 @@ def test_update_flag_v2_serializer__duplicate_mv_option__returns_invalid(
                     "segment_id": segment.id,
                     "enabled": True,
                     "value": {"type": "string", "value": "test"},
-                    "multivariate_feature_state_values": [
+                    "multivariate_options": [
                         {
-                            "multivariate_feature_option": option.id,
+                            "id": option.id,
                             "percentage_allocation": 40,
                         },
                         {
-                            "multivariate_feature_option": option.id,
+                            "id": option.id,
                             "percentage_allocation": 60,
                         },
                     ],
@@ -264,14 +264,93 @@ def test_update_flag_v2_serializer__duplicate_mv_option__returns_invalid(
     assert "must be unique" in str(serializer.errors)
 
 
-def test_validate_multivariate_state_values__empty_list__is_noop(
+def test_validate_multivariate_options__empty_list__is_noop(
     feature: Feature,
 ) -> None:
     # Given
-    multivariate_values: list[dict[str, typing.Any]] = []
+    multivariate_options: list[dict[str, typing.Any]] = []
 
     # When / Then no exception is raised
-    validate_multivariate_state_values(feature, multivariate_values)
+    validate_multivariate_options(feature, multivariate_options)
+
+
+@pytest.mark.parametrize(
+    "multivariate_option",
+    [
+        pytest.param(
+            {"percentage_allocation": 50, "value": {"type": "string", "value": "new"}},
+            id="create",
+        ),
+        pytest.param(
+            lambda option: {
+                "id": option.id,
+                "percentage_allocation": 50,
+                "value": {"type": "string", "value": "changed"},
+            },
+            id="value_update",
+        ),
+    ],
+)
+def test_update_flag_serializer__segment_with_multivariate_option_write__returns_invalid(
+    multivariate_feature: Feature,
+    multivariate_options: list,  # type: ignore[type-arg]
+    environment: Environment,
+    segment: Segment,
+    multivariate_option: typing.Any,
+) -> None:
+    # Given
+    if callable(multivariate_option):
+        multivariate_option = multivariate_option(multivariate_options[0])
+    serializer = UpdateFlagSerializer(
+        data={
+            "feature": {"name": multivariate_feature.name},
+            "segment": {"id": segment.id},
+            "multivariate_options": [multivariate_option],
+        },
+        context={"environment": environment},
+    )
+
+    # When
+    is_valid = serializer.is_valid()
+
+    # Then
+    assert is_valid is False
+    assert "can only update percentage allocations" in str(serializer.errors)
+
+
+def test_update_flag_v2_serializer__segment_override_multivariate_value__returns_invalid(
+    multivariate_feature: Feature,
+    multivariate_options: list,  # type: ignore[type-arg]
+    environment: Environment,
+    segment: Segment,
+) -> None:
+    # Given
+    option = multivariate_options[0]
+    serializer = UpdateFlagV2Serializer(
+        data={
+            "feature": {"name": multivariate_feature.name},
+            "segment_overrides": [
+                {
+                    "segment_id": segment.id,
+                    "multivariate_options": [
+                        {
+                            "id": option.id,
+                            "percentage_allocation": 50,
+                            "value": {"type": "string", "value": "changed"},
+                        }
+                    ],
+                },
+            ],
+        },
+        context={"environment": environment},
+    )
+
+    # When
+    is_valid = serializer.is_valid()
+
+    # Then
+    assert is_valid is False
+    assert "can only be set at the environment default level" in str(serializer.errors)
 
 
 def test_update_flag_v2_serializer__valid_mv_option__change_set_carries_mv(
@@ -298,9 +377,9 @@ def test_update_flag_v2_serializer__valid_mv_option__change_set_carries_mv(
                     "segment_id": segment.id,
                     "enabled": True,
                     "value": {"type": "string", "value": "test"},
-                    "multivariate_feature_state_values": [
+                    "multivariate_options": [
                         {
-                            "multivariate_feature_option": option.id,
+                            "id": option.id,
                             "percentage_allocation": 75,
                         }
                     ],
